@@ -6,13 +6,14 @@
     <title>Black and White Pixelated Image Converter</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; }
-        canvas { border: 1px solid #ccc; margin: 20px; }
+        canvas { border: 1px solid #ccc; margin: 20px; cursor: crosshair; }
         label { display: block; margin: 10px; }
         input[type="range"] { width: 200px; }
         input[type="number"] { width: 80px; }
         .crop-controls { margin: 20px auto; max-width: 600px; }
         .crop-controls label { display: inline-block; margin: 5px 10px; }
         button { padding: 10px 20px; margin: 10px; font-size: 16px; cursor: pointer; }
+        #canvasContainer { display: inline-block; position: relative; }
     </style>
 </head>
 <body>
@@ -23,16 +24,18 @@
     <label>Threshold: <input type="range" id="threshold" min="0" max="255" value="128"></label>
     <br>
     <div class="crop-controls">
-        <h3>Crop Settings</h3>
+        <h3>Crop Settings (Click and drag on canvas to select crop area)</h3>
         <label>X: <input type="number" id="cropX" min="0" value="0"></label>
         <label>Y: <input type="number" id="cropY" min="0" value="0"></label>
         <label>Width: <input type="number" id="cropWidth" min="1" value="1"></label>
         <label>Height: <input type="number" id="cropHeight" min="1" value="1"></label>
-        <button id="applyCrop">Apply Crop</button>
+        <button id="cropBtn">Crop</button>
     </div>
     <button id="downloadBtn">Download Image</button>
     <br>
-    <canvas id="canvas"></canvas>
+    <div id="canvasContainer">
+        <canvas id="canvas"></canvas>
+    </div>
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
@@ -42,16 +45,28 @@
         const cropYInput = document.getElementById('cropY');
         const cropWidthInput = document.getElementById('cropWidth');
         const cropHeightInput = document.getElementById('cropHeight');
-        const applyCropBtn = document.getElementById('applyCrop');
+        const cropBtn = document.getElementById('cropBtn');
         const downloadBtn = document.getElementById('downloadBtn');
         let originalImage;
+        let processedImage; // Store the current processed image
         let cropX = 0, cropY = 0, cropWidth = 0, cropHeight = 0;
+        
+        // Mouse event tracking for interactive crop
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let currentCropRect = null;
 
         document.getElementById('imageInput').addEventListener('change', handleImage);
         pixelSizeInput.addEventListener('input', processImage);
         thresholdInput.addEventListener('input', processImage);
-        applyCropBtn.addEventListener('click', applyCrop);
+        cropBtn.addEventListener('click', applyCrop);
         downloadBtn.addEventListener('click', downloadImage);
+        
+        // Add mouse event listeners for interactive crop
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('mouseleave', handleMouseUp);
 
         function handleImage(e) {
             const file = e.target.files[0];
@@ -74,38 +89,133 @@
                 cropYInput.max = img.height;
                 cropWidthInput.max = img.width;
                 cropHeightInput.max = img.height;
+                currentCropRect = null;
                 processImage();
             };
             img.src = URL.createObjectURL(file);
         }
+        
+        function handleMouseDown(e) {
+            if (!processedImage) return;
+            const rect = canvas.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+            isDragging = true;
+        }
+        
+        function handleMouseMove(e) {
+            if (!isDragging || !processedImage) return;
+            const rect = canvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+            
+            // Calculate crop rectangle
+            const x = Math.min(startX, currentX);
+            const y = Math.min(startY, currentY);
+            const w = Math.abs(currentX - startX);
+            const h = Math.abs(currentY - startY);
+            
+            currentCropRect = { x, y, w, h };
+            
+            // Update input fields
+            cropXInput.value = Math.round(x);
+            cropYInput.value = Math.round(y);
+            cropWidthInput.value = Math.round(w);
+            cropHeightInput.value = Math.round(h);
+            
+            // Redraw image with crop rectangle
+            drawImageWithCropRect();
+        }
+        
+        function handleMouseUp(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            if (currentCropRect && currentCropRect.w > 0 && currentCropRect.h > 0) {
+                // Keep the crop rectangle visible
+                drawImageWithCropRect();
+            }
+        }
+        
+        function drawImageWithCropRect() {
+            if (!processedImage) return;
+            
+            // Redraw the processed image
+            ctx.putImageData(processedImage, 0, 0);
+            
+            // Draw crop rectangle if it exists
+            if (currentCropRect && currentCropRect.w > 0 && currentCropRect.h > 0) {
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeRect(currentCropRect.x, currentCropRect.y, currentCropRect.w, currentCropRect.h);
+                ctx.setLineDash([]);
+                
+                // Draw semi-transparent overlay outside crop area
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                
+                // Top
+                ctx.fillRect(0, 0, canvas.width, currentCropRect.y);
+                // Bottom
+                ctx.fillRect(0, currentCropRect.y + currentCropRect.h, canvas.width, canvas.height - (currentCropRect.y + currentCropRect.h));
+                // Left
+                ctx.fillRect(0, currentCropRect.y, currentCropRect.x, currentCropRect.h);
+                // Right
+                ctx.fillRect(currentCropRect.x + currentCropRect.w, currentCropRect.y, canvas.width - (currentCropRect.x + currentCropRect.w), currentCropRect.h);
+            }
+        }
 
         function applyCrop() {
-            if (!originalImage) return;
-            cropX = parseInt(cropXInput.value);
-            cropY = parseInt(cropYInput.value);
-            cropWidth = parseInt(cropWidthInput.value);
-            cropHeight = parseInt(cropHeightInput.value);
+            if (!originalImage || !currentCropRect || currentCropRect.w <= 0 || currentCropRect.h <= 0) {
+                alert('Please select a crop area by dragging on the canvas first!');
+                return;
+            }
+            
+            cropX = Math.round(currentCropRect.x);
+            cropY = Math.round(currentCropRect.y);
+            cropWidth = Math.round(currentCropRect.w);
+            cropHeight = Math.round(currentCropRect.h);
             
             // Validate crop bounds
-            if (isNaN(cropX) || cropX < 0) cropX = 0;
-            if (isNaN(cropY) || cropY < 0) cropY = 0;
-            if (isNaN(cropWidth) || cropWidth < 1) cropWidth = 1;
-            if (isNaN(cropHeight) || cropHeight < 1) cropHeight = 1;
-            if (cropX + cropWidth > originalImage.width) cropWidth = originalImage.width - cropX;
-            if (cropY + cropHeight > originalImage.height) cropHeight = originalImage.height - cropY;
+            if (cropX < 0) cropX = 0;
+            if (cropY < 0) cropY = 0;
+            if (cropWidth < 1) cropWidth = 1;
+            if (cropHeight < 1) cropHeight = 1;
+            if (cropX + cropWidth > canvas.width) cropWidth = canvas.width - cropX;
+            if (cropY + cropHeight > canvas.height) cropHeight = canvas.height - cropY;
             if (cropWidth < 1) cropWidth = 1;
             if (cropHeight < 1) cropHeight = 1;
             
-            // Update input fields with validated values
-            cropXInput.value = cropX;
-            cropYInput.value = cropY;
-            cropWidthInput.value = cropWidth;
-            cropHeightInput.value = cropHeight;
+            // Create a new canvas with the cropped area
+            const croppedCanvas = document.createElement('canvas');
+            const croppedCtx = croppedCanvas.getContext('2d');
+            croppedCanvas.width = cropWidth;
+            croppedCanvas.height = cropHeight;
             
-            // Adjust canvas size to crop dimensions
+            // Copy the cropped area from the current processed image
+            const imageData = ctx.getImageData(cropX, cropY, cropWidth, cropHeight);
+            croppedCtx.putImageData(imageData, 0, 0);
+            
+            // Update main canvas to show only cropped area
             canvas.width = cropWidth;
             canvas.height = cropHeight;
-            processImage();
+            ctx.putImageData(imageData, 0, 0);
+            
+            // Store the cropped result
+            processedImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Reset crop rectangle
+            currentCropRect = null;
+            
+            // Update input fields
+            cropXInput.value = 0;
+            cropYInput.value = 0;
+            cropWidthInput.value = cropWidth;
+            cropHeightInput.value = cropHeight;
+            cropXInput.max = cropWidth;
+            cropYInput.max = cropHeight;
+            cropWidthInput.max = cropWidth;
+            cropHeightInput.max = cropHeight;
         }
 
         function processImage() {
@@ -116,13 +226,13 @@
             // Create temp canvas for the cropped area
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
-            tempCanvas.width = Math.ceil(cropWidth / pixelSize);
-            tempCanvas.height = Math.ceil(cropHeight / pixelSize);
+            tempCanvas.width = Math.ceil(canvas.width / pixelSize);
+            tempCanvas.height = Math.ceil(canvas.height / pixelSize);
             
-            // Draw cropped portion of original image to temp canvas (downscaled)
+            // Draw the full original image or current canvas content (downscaled)
             tempCtx.drawImage(
                 originalImage,
-                cropX, cropY, cropWidth, cropHeight,
+                0, 0, originalImage.width, originalImage.height,
                 0, 0, tempCanvas.width, tempCanvas.height
             );
 
@@ -142,6 +252,12 @@
             // Draw back to main canvas with pixelated scaling
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+            
+            // Store the processed image
+            processedImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Redraw with crop rectangle if exists
+            drawImageWithCropRect();
         }
 
         function downloadImage() {
