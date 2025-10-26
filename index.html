@@ -26,8 +26,8 @@
         <h3>Crop Settings</h3>
         <label>X: <input type="number" id="cropX" min="0" value="0"></label>
         <label>Y: <input type="number" id="cropY" min="0" value="0"></label>
-        <label>Width: <input type="number" id="cropWidth" min="1" value="0"></label>
-        <label>Height: <input type="number" id="cropHeight" min="1" value="0"></label>
+        <label>Width: <input type="number" id="cropWidth" min="1" value="1"></label>
+        <label>Height: <input type="number" id="cropHeight" min="1" value="1"></label>
         <button id="applyCrop">Apply Crop</button>
     </div>
     <button id="downloadBtn">Download Image</button>
@@ -81,18 +81,26 @@
 
         function applyCrop() {
             if (!originalImage) return;
-            cropX = parseInt(cropXInput.value) || 0;
-            cropY = parseInt(cropYInput.value) || 0;
-            cropWidth = parseInt(cropWidthInput.value) || originalImage.width;
-            cropHeight = parseInt(cropHeightInput.value) || originalImage.height;
+            cropX = parseInt(cropXInput.value);
+            cropY = parseInt(cropYInput.value);
+            cropWidth = parseInt(cropWidthInput.value);
+            cropHeight = parseInt(cropHeightInput.value);
             
             // Validate crop bounds
-            if (cropX < 0) cropX = 0;
-            if (cropY < 0) cropY = 0;
+            if (isNaN(cropX) || cropX < 0) cropX = 0;
+            if (isNaN(cropY) || cropY < 0) cropY = 0;
+            if (isNaN(cropWidth) || cropWidth < 1) cropWidth = 1;
+            if (isNaN(cropHeight) || cropHeight < 1) cropHeight = 1;
             if (cropX + cropWidth > originalImage.width) cropWidth = originalImage.width - cropX;
             if (cropY + cropHeight > originalImage.height) cropHeight = originalImage.height - cropY;
             if (cropWidth < 1) cropWidth = 1;
             if (cropHeight < 1) cropHeight = 1;
+            
+            // Update input fields with validated values
+            cropXInput.value = cropX;
+            cropYInput.value = cropY;
+            cropWidthInput.value = cropWidth;
+            cropHeightInput.value = cropHeight;
             
             // Adjust canvas size to crop dimensions
             canvas.width = cropWidth;
