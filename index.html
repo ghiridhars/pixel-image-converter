@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Black and White Pixelated Image Converter</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        canvas { border: 1px solid #ccc; margin: 20px; }
+        label { display: block; margin: 10px; }
+        input[type="range"] { width: 200px; }
+    </style>
+</head>
+<body>
+    <h1>Black and White Pixelated Image Converter</h1>
+    <input type="file" id="imageInput" accept="image/*">
+    <br>
+    <label>Pixel Size: <input type="range" id="pixelSize" min="2" max="50" value="10"></label>
+    <label>Threshold: <input type="range" id="threshold" min="0" max="255" value="128"></label>
+    <br>
+    <canvas id="canvas"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const pixelSizeInput = document.getElementById('pixelSize');
+        const thresholdInput = document.getElementById('threshold');
+        let originalImage;
+
+        document.getElementById('imageInput').addEventListener('change', handleImage);
+        pixelSizeInput.addEventListener('input', processImage);
+        thresholdInput.addEventListener('input', processImage);
+
+        function handleImage(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const img = new Image();
+            img.onload = () => {
+                originalImage = img;
+                canvas.width = img.width;
+                canvas.height = img.height;
+                processImage();
+            };
+            img.src = URL.createObjectURL(file);
+        }
+
+        function processImage() {
+            if (!originalImage) return;
+            const pixelSize = parseInt(pixelSizeInput.value);
+            const threshold = parseInt(thresholdInput.value);
+
+            // Create temp canvas for downscaling
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = Math.ceil(originalImage.width / pixelSize);
+            tempCanvas.height = Math.ceil(originalImage.height / pixelSize);
+            tempCtx.drawImage(originalImage, 0, 0, tempCanvas.width, tempCanvas.height);
+
+            // Get image data and convert to BW
+            const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const gray = (r + g + b) / 3;
+                const bw = gray > threshold ? 255 : 0;
+                data[i] = data[i + 1] = data[i + 2] = bw;
+            }
+            tempCtx.putImageData(imageData, 0, 0);
+
+            // Draw back to main canvas with pixelated scaling
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+        }
+    </script>
+</body>
+</html>
