@@ -9,6 +9,10 @@
         canvas { border: 1px solid #ccc; margin: 20px; }
         label { display: block; margin: 10px; }
         input[type="range"] { width: 200px; }
+        input[type="number"] { width: 80px; }
+        .crop-controls { margin: 20px auto; max-width: 600px; }
+        .crop-controls label { display: inline-block; margin: 5px 10px; }
+        button { padding: 10px 20px; margin: 10px; font-size: 16px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -18,17 +22,36 @@
     <label>Pixel Size: <input type="range" id="pixelSize" min="2" max="50" value="10"></label>
     <label>Threshold: <input type="range" id="threshold" min="0" max="255" value="128"></label>
     <br>
+    <div class="crop-controls">
+        <h3>Crop Settings</h3>
+        <label>X: <input type="number" id="cropX" min="0" value="0"></label>
+        <label>Y: <input type="number" id="cropY" min="0" value="0"></label>
+        <label>Width: <input type="number" id="cropWidth" min="1" value="1"></label>
+        <label>Height: <input type="number" id="cropHeight" min="1" value="1"></label>
+        <button id="applyCrop">Apply Crop</button>
+    </div>
+    <button id="downloadBtn">Download Image</button>
+    <br>
     <canvas id="canvas"></canvas>
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const pixelSizeInput = document.getElementById('pixelSize');
         const thresholdInput = document.getElementById('threshold');
+        const cropXInput = document.getElementById('cropX');
+        const cropYInput = document.getElementById('cropY');
+        const cropWidthInput = document.getElementById('cropWidth');
+        const cropHeightInput = document.getElementById('cropHeight');
+        const applyCropBtn = document.getElementById('applyCrop');
+        const downloadBtn = document.getElementById('downloadBtn');
         let originalImage;
+        let cropX = 0, cropY = 0, cropWidth = 0, cropHeight = 0;
 
         document.getElementById('imageInput').addEventListener('change', handleImage);
         pixelSizeInput.addEventListener('input', processImage);
         thresholdInput.addEventListener('input', processImage);
+        applyCropBtn.addEventListener('click', applyCrop);
+        downloadBtn.addEventListener('click', downloadImage);
 
         function handleImage(e) {
             const file = e.target.files[0];
@@ -38,9 +61,51 @@
                 originalImage = img;
                 canvas.width = img.width;
                 canvas.height = img.height;
+                // Reset crop settings to full image
+                cropX = 0;
+                cropY = 0;
+                cropWidth = img.width;
+                cropHeight = img.height;
+                cropXInput.value = 0;
+                cropYInput.value = 0;
+                cropWidthInput.value = img.width;
+                cropHeightInput.value = img.height;
+                cropXInput.max = img.width;
+                cropYInput.max = img.height;
+                cropWidthInput.max = img.width;
+                cropHeightInput.max = img.height;
                 processImage();
             };
             img.src = URL.createObjectURL(file);
+        }
+
+        function applyCrop() {
+            if (!originalImage) return;
+            cropX = parseInt(cropXInput.value);
+            cropY = parseInt(cropYInput.value);
+            cropWidth = parseInt(cropWidthInput.value);
+            cropHeight = parseInt(cropHeightInput.value);
+            
+            // Validate crop bounds
+            if (isNaN(cropX) || cropX < 0) cropX = 0;
+            if (isNaN(cropY) || cropY < 0) cropY = 0;
+            if (isNaN(cropWidth) || cropWidth < 1) cropWidth = 1;
+            if (isNaN(cropHeight) || cropHeight < 1) cropHeight = 1;
+            if (cropX + cropWidth > originalImage.width) cropWidth = originalImage.width - cropX;
+            if (cropY + cropHeight > originalImage.height) cropHeight = originalImage.height - cropY;
+            if (cropWidth < 1) cropWidth = 1;
+            if (cropHeight < 1) cropHeight = 1;
+            
+            // Update input fields with validated values
+            cropXInput.value = cropX;
+            cropYInput.value = cropY;
+            cropWidthInput.value = cropWidth;
+            cropHeightInput.value = cropHeight;
+            
+            // Adjust canvas size to crop dimensions
+            canvas.width = cropWidth;
+            canvas.height = cropHeight;
+            processImage();
         }
 
         function processImage() {
@@ -48,12 +113,18 @@
             const pixelSize = parseInt(pixelSizeInput.value);
             const threshold = parseInt(thresholdInput.value);
 
-            // Create temp canvas for downscaling
+            // Create temp canvas for the cropped area
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
-            tempCanvas.width = Math.ceil(originalImage.width / pixelSize);
-            tempCanvas.height = Math.ceil(originalImage.height / pixelSize);
-            tempCtx.drawImage(originalImage, 0, 0, tempCanvas.width, tempCanvas.height);
+            tempCanvas.width = Math.ceil(cropWidth / pixelSize);
+            tempCanvas.height = Math.ceil(cropHeight / pixelSize);
+            
+            // Draw cropped portion of original image to temp canvas (downscaled)
+            tempCtx.drawImage(
+                originalImage,
+                cropX, cropY, cropWidth, cropHeight,
+                0, 0, tempCanvas.width, tempCanvas.height
+            );
 
             // Get image data and convert to BW
             const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
@@ -71,6 +142,18 @@
             // Draw back to main canvas with pixelated scaling
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+        }
+
+        function downloadImage() {
+            if (!originalImage) {
+                alert('Please load an image first!');
+                return;
+            }
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'pixelated-image.png';
+            link.href = dataURL;
+            link.click();
         }
     </script>
 </body>
