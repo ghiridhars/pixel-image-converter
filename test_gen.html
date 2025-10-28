@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html><body>
+<canvas id="c" width="400" height="300"></canvas>
+<a id="dl" download="test.png">Download</a>
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+ctx.fillStyle = "white";
+ctx.fillRect(0, 0, 400, 300);
+ctx.fillStyle = "black";
+ctx.fillRect(50, 50, 100, 100);
+ctx.fillStyle = "gray";
+ctx.beginPath();
+ctx.arc(275, 125, 75, 0, Math.PI * 2);
+ctx.fill();
+ctx.fillStyle = "darkgray";
+ctx.fillRect(100, 200, 200, 50);
+const dl = document.getElementById("dl");
+dl.href = c.toDataURL();
+</script>
+</body></html>
