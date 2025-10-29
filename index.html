@@ -5,40 +5,379 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Black and White Pixelated Image Converter</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; }
-        canvas { border: 1px solid #ccc; margin: 20px; cursor: crosshair; max-width: 100%; height: auto; }
-        label { display: block; margin: 10px; }
-        input[type="range"] { width: 200px; }
-        input[type="number"] { width: 80px; }
-        .crop-controls { margin: 20px auto; max-width: 600px; }
-        .crop-controls label { display: inline-block; margin: 5px 10px; }
-        button { padding: 10px 20px; margin: 10px; font-size: 16px; cursor: pointer; }
-        #canvasContainer { display: inline-block; position: relative; max-width: 100%; }
+        /* Base styles and CSS reset */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            /* Use CSS Grid for viewport-height layout (no page scroll) */
+            display: grid;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* Header/Title Bar */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        /* Main container: two-pane layout */
+        .main-container {
+            display: grid;
+            /* Left panel: fixed width (280-360px), Right panel: fills remaining space */
+            grid-template-columns: minmax(280px, 360px) 1fr;
+            gap: 0;
+            overflow: hidden;
+            height: 100%;
+        }
+        
+        /* Left controls panel - independently scrollable */
+        .controls-panel {
+            background: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+        
+        /* Right stage area - scrollable container for canvas */
+        .stage-area {
+            overflow: auto;
+            background: #ffffff;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 2rem;
+        }
+        
+        /* Canvas container - wraps canvas with crop overlay */
+        #canvasContainer {
+            position: relative;
+            display: inline-block;
+            /* Canvas uses pixelated rendering for crisp pixels */
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        
+        /* Canvas - preserve pixelation quality */
+        canvas {
+            border: 1px solid #ccc;
+            cursor: crosshair;
+            display: block;
+            /* Pixelated rendering for crisp edges */
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        
+        /* When fit-to-width is enabled, constrain canvas width */
+        #canvasContainer.fit-to-width canvas {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        /* Section headings in controls */
+        .section-heading {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #495057;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin: 1.5rem 0 0.75rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .section-heading:first-child {
+            margin-top: 0;
+        }
+        
+        /* Control groups */
+        .control-group {
+            margin-bottom: 1.25rem;
+        }
+        
+        .control-group label {
+            display: block;
+            font-size: 0.875rem;
+            color: #495057;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        
+        /* Input styling */
+        input[type="file"] {
+            width: 100%;
+            padding: 0.5rem;
+            border: 2px dashed #dee2e6;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            background: white;
+            transition: border-color 0.2s;
+        }
+        
+        input[type="file"]:hover {
+            border-color: #667eea;
+        }
+        
+        input[type="file"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #dee2e6;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: #764ba2;
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s;
+        }
+        
+        input[type="range"]::-moz-range-thumb:hover {
+            background: #764ba2;
+        }
+        
+        input[type="range"]:focus {
+            outline: none;
+        }
+        
+        input[type="range"]:focus::-webkit-slider-thumb {
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+        }
+        
+        input[type="range"]:focus::-moz-range-thumb {
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+        }
+        
+        .range-value {
+            display: inline-block;
+            min-width: 3ch;
+            text-align: right;
+            font-weight: 600;
+            color: #667eea;
+        }
+        
+        input[type="number"] {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            margin-right: 0.5rem;
+        }
+        
+        /* Buttons */
+        button {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background: #667eea;
+            color: white;
+            transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            background: #764ba2;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:disabled {
+            background: #dee2e6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* Crop controls grid */
+        .crop-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        
+        /* Checkbox label */
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        /* Responsive: stack layout on narrow screens */
+        @media (max-width: 899px) {
+            .main-container {
+                /* Single column: controls above stage */
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+            }
+            
+            .controls-panel {
+                border-right: none;
+                border-bottom: 1px solid #dee2e6;
+                max-height: 40vh;
+            }
+            
+            .stage-area {
+                padding: 1rem;
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>Black and White Pixelated Image Converter</h1>
-    <input type="file" id="imageInput" accept="image/*">
-    <br>
-    <label>Pixel Size: <input type="range" id="pixelSize" min="2" max="50" value="10"></label>
-    <label>Threshold: <input type="range" id="threshold" min="0" max="255" value="128"></label>
-    <br>
-    <div class="crop-controls">
-        <h3>Crop Settings (Click and drag on canvas to select crop area)</h3>
-        <label>X: <input type="number" id="cropX" min="0" value="0"></label>
-        <label>Y: <input type="number" id="cropY" min="0" value="0"></label>
-        <label>Width: <input type="number" id="cropWidth" min="1" value="1"></label>
-        <label>Height: <input type="number" id="cropHeight" min="1" value="1"></label>
-        <button id="cropBtn">Crop</button>
+    <!-- Header/Title Bar -->
+    <div class="header">
+        <h1>Black and White Pixelated Image Converter</h1>
     </div>
-    <button id="downloadBtn">Download Image</button>
-    <br>
-    <div id="canvasContainer">
-        <canvas id="canvas"></canvas>
+    
+    <!-- Main two-pane container -->
+    <div class="main-container">
+        <!-- Left Controls Panel (independently scrollable) -->
+        <div class="controls-panel">
+            <!-- Image Upload Section -->
+            <div class="section-heading">Image Upload</div>
+            <div class="control-group">
+                <input type="file" id="imageInput" accept="image/*">
+            </div>
+            
+            <!-- Display Settings Section -->
+            <div class="section-heading">Display Settings</div>
+            <div class="control-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="fitToWidth" checked>
+                    <span>Fit to width</span>
+                </label>
+                <small style="display: block; margin-top: 0.25rem; color: #6c757d; font-size: 0.75rem;">
+                    When off, canvas shows at actual pixel size with scrollbars
+                </small>
+            </div>
+            
+            <!-- Processing Settings Section -->
+            <div class="section-heading">Processing Settings</div>
+            <div class="control-group">
+                <label>
+                    Pixel Size: <span class="range-value" id="pixelSizeValue">10</span>
+                </label>
+                <input type="range" id="pixelSize" min="2" max="50" value="10">
+            </div>
+            
+            <div class="control-group">
+                <label>
+                    Threshold: <span class="range-value" id="thresholdValue">128</span>
+                </label>
+                <input type="range" id="threshold" min="0" max="255" value="128">
+            </div>
+            
+            <!-- Crop Settings Section -->
+            <div class="section-heading">Crop Settings</div>
+            <p style="font-size: 0.75rem; color: #6c757d; margin-bottom: 0.75rem;">
+                Click and drag on canvas to select crop area
+            </p>
+            <div class="crop-inputs">
+                <div class="control-group">
+                    <label>X</label>
+                    <input type="number" id="cropX" min="0" value="0">
+                </div>
+                <div class="control-group">
+                    <label>Y</label>
+                    <input type="number" id="cropY" min="0" value="0">
+                </div>
+                <div class="control-group">
+                    <label>Width</label>
+                    <input type="number" id="cropWidth" min="1" value="1">
+                </div>
+                <div class="control-group">
+                    <label>Height</label>
+                    <input type="number" id="cropHeight" min="1" value="1">
+                </div>
+            </div>
+            <button id="cropBtn">Crop</button>
+            
+            <!-- Actions Section -->
+            <div class="section-heading">Actions</div>
+            <button id="downloadBtn">Download Image</button>
+        </div>
+        
+        <!-- Right Stage Area (scrollable container for canvas) -->
+        <div class="stage-area">
+            <div id="canvasContainer" class="fit-to-width">
+                <canvas id="canvas"></canvas>
+            </div>
+        </div>
     </div>
     <script>
+        // DOM element references
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        const canvasContainer = document.getElementById('canvasContainer');
         const pixelSizeInput = document.getElementById('pixelSize');
         const thresholdInput = document.getElementById('threshold');
         const cropXInput = document.getElementById('cropX');
@@ -47,8 +386,13 @@
         const cropHeightInput = document.getElementById('cropHeight');
         const cropBtn = document.getElementById('cropBtn');
         const downloadBtn = document.getElementById('downloadBtn');
+        const fitToWidthCheckbox = document.getElementById('fitToWidth');
+        const pixelSizeValue = document.getElementById('pixelSizeValue');
+        const thresholdValue = document.getElementById('thresholdValue');
+        
+        // State variables
         let originalImage;
-        let processedImage; // Store the current processed image
+        let processedImage; // Store the current processed image (internal buffer at full resolution)
         let cropX = 0, cropY = 0, cropWidth = 0, cropHeight = 0;
         
         // Mouse event tracking for interactive crop
@@ -56,11 +400,31 @@
         let startX = 0, startY = 0;
         let currentCropRect = null;
 
+        // Event listeners
         document.getElementById('imageInput').addEventListener('change', handleImage);
-        pixelSizeInput.addEventListener('input', processImage);
-        thresholdInput.addEventListener('input', processImage);
+        pixelSizeInput.addEventListener('input', (e) => {
+            pixelSizeValue.textContent = e.target.value;
+            processImage();
+        });
+        thresholdInput.addEventListener('input', (e) => {
+            thresholdValue.textContent = e.target.value;
+            processImage();
+        });
         cropBtn.addEventListener('click', applyCrop);
         downloadBtn.addEventListener('click', downloadImage);
+        
+        // Fit-to-width toggle handler
+        // When enabled: canvas displays at max-width:100% (CSS scaled for viewing)
+        // When disabled: canvas displays at actual pixel size (100%) with scrollbars in stage container
+        fitToWidthCheckbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                canvasContainer.classList.add('fit-to-width');
+            } else {
+                canvasContainer.classList.remove('fit-to-width');
+            }
+            // Redraw to ensure crop overlay positions correctly at new scale
+            drawImageWithCropRect();
+        });
         
         // Add mouse event listeners for interactive crop
         canvas.addEventListener('mousedown', handleMouseDown);
@@ -98,18 +462,25 @@
         function handleMouseDown(e) {
             if (!processedImage) return;
             const rect = canvas.getBoundingClientRect();
-            startX = e.clientX - rect.left;
-            startY = e.clientY - rect.top;
+            // Convert from displayed canvas coordinates to actual canvas coordinates
+            // This accounts for CSS scaling when fit-to-width is enabled
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            startX = (e.clientX - rect.left) * scaleX;
+            startY = (e.clientY - rect.top) * scaleY;
             isDragging = true;
         }
         
         function handleMouseMove(e) {
             if (!isDragging || !processedImage) return;
             const rect = canvas.getBoundingClientRect();
-            const currentX = e.clientX - rect.left;
-            const currentY = e.clientY - rect.top;
+            // Convert from displayed canvas coordinates to actual canvas coordinates
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const currentX = (e.clientX - rect.left) * scaleX;
+            const currentY = (e.clientY - rect.top) * scaleY;
             
-            // Calculate crop rectangle
+            // Calculate crop rectangle in actual canvas coordinates
             const x = Math.min(startX, currentX);
             const y = Math.min(startY, currentY);
             const w = Math.abs(currentX - startX);
@@ -250,10 +621,12 @@
             tempCtx.putImageData(imageData, 0, 0);
 
             // Draw back to main canvas with pixelated scaling
+            // imageSmoothingEnabled = false ensures crisp pixel edges (internal rendering quality)
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
             
-            // Store the processed image
+            // Store the processed image (internal buffer at full canvas resolution)
+            // The fit-to-width toggle scales the display via CSS but doesn't affect this buffer
             processedImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
             
             // Redraw with crop rectangle if exists
